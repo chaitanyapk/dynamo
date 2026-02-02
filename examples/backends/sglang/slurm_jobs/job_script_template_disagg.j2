@@ -8,6 +8,9 @@
 #SBATCH --output=logs/%j_{{ prefill_workers }}P_{{ decode_workers }}D_{{ timestamp }}/log.out
 #SBATCH --error=logs/%j_{{ prefill_workers }}P_{{ decode_workers }}D_{{ timestamp }}/log.err
 #SBATCH --partition={{ partition }}
+#SBATCH --gpus-per-node=4
+#SBATCH --mem=500G
+
 
 # Constants
 set -x
@@ -30,6 +33,20 @@ CONFIG_DIR="{{ config_dir }}"
 CONTAINER_IMAGE="{{ container_image }}"
 NETWORK_INTERFACE="{{ network_interface }}"
 GPU_TYPE="{{ gpu_type | default('h100') }}"
+
+CURRENT_USER=$(whoami)
+CACHE_ROOT="/lustre/${CURRENT_USER}/model_cache"
+# export WRITABLE_CACHE="/lustre/${CURRENT_USER}/.cache"
+# export XDG_CACHE_HOME="${WRITABLE_CACHE}"
+# export FLASHINFER_WORKSPACE_DIR="${WRITABLE_CACHE}/flashinfer"
+# export TORCH_EXTENSIONS_DIR="${WRITABLE_CACHE}/torch_extensions"
+# export TRITON_CACHE_DIR="${WRITABLE_CACHE}/triton"
+
+# mkdir -p "$FLASHINFER_WORKSPACE_DIR"
+# mkdir -p "$TORCH_EXTENSIONS_DIR"
+# mkdir -p "$TRITON_CACHE_DIR"
+export CONTAINER_HOME=/lustre/${CURRENT_USER}
+
 set +x
 
 {% raw %}
@@ -166,7 +183,8 @@ ENROOT_ARGS="\
     --container-image=${CONTAINER_IMAGE} \
     --no-container-entrypoint \
     --no-container-mount-home \
-    --container-mounts=${MODEL_DIR}:/model/,${CONFIG_DIR}:/configs/,${SCRIPT_DIR}:/scripts/,${OUTPUT_DIR}:/outputs/,${LOG_DIR}:/logs/ \
+    --export=HOME='/lustre_mount',XDG_CACHE_HOME='/lustre_mount/.cache',FLASHINFER_WORKSPACE_DIR='/lustre_mount/flashinfer_workspace',TORCH_EXTENSIONS_DIR='/lustre_mount/torch_extensions' \
+    --container-mounts=${MODEL_DIR}:/model/,${CONFIG_DIR}:/configs/,${SCRIPT_DIR}:/scripts/,${OUTPUT_DIR}:/outputs/,${LOG_DIR}:/logs/,${CONTAINER_HOME}:/lustre_mount,/dev/shm:/dev/shm \
 "
 
 # Build common worker arguments
@@ -198,11 +216,7 @@ WORKER_ARGS="$WORKER_ARGS --run-in-ci"
 {% endraw %}
 {% if enable_multiple_frontends %}
 {% raw %}
-# Launch nginx on node 0
-echo "Launching nginx on ${NGINX_NODE}"
-cmd="srun --overlap $ENROOT_ARGS --nodes=1 --ntasks=1 --nodelist=$NGINX_NODE --output=${LOG_DIR}/${NGINX_NODE}_nginx.out --error=${LOG_DIR}/${NGINX_NODE}_nginx.err python /scripts/worker_setup.py --worker_type nginx --nginx_config /logs/nginx.conf ${WORKER_ARGS}"
-echo "$cmd"
-$cmd &
+#contents of the model path directory
 
 # Launch frontend on master node (node 1) - this will also start NATS/ETCD
 echo "Launching frontend + NATS/ETCD on master node ${MASTER_NODE}"

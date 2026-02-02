@@ -28,7 +28,7 @@ ETCD_CLIENT_PORT = 2379
 ETCD_PEER_PORT = 2380
 NATS_PORT = 4222
 DIST_INIT_PORT = 29500
-ETCD_LISTEN_ADDR = "http://0.0.0.0"
+ETCD_LISTEN_ADDR = "0.0.0.0"
 
 
 def setup_logging(level: int = logging.INFO) -> None:
@@ -334,10 +334,11 @@ def setup_head_prefill_node(prefill_host_ip: str, run_in_ci: bool = False) -> No
         etcd_binary = "etcd"
 
     etcd_cmd = (
-        f"{etcd_binary} --listen-client-urls {ETCD_LISTEN_ADDR}:{ETCD_CLIENT_PORT} "
-        f"--advertise-client-urls {ETCD_LISTEN_ADDR}:{ETCD_CLIENT_PORT} "
-        f"--listen-peer-urls {ETCD_LISTEN_ADDR}:{ETCD_PEER_PORT} "
-        f"--initial-cluster default=http://{prefill_host_ip}:{ETCD_PEER_PORT}"
+        f"{etcd_binary} --listen-client-urls http://{ETCD_LISTEN_ADDR}:{ETCD_CLIENT_PORT} "
+        f"--advertise-client-urls http://{prefill_host_ip}:{ETCD_CLIENT_PORT} "
+        f"--listen-peer-urls http://{ETCD_LISTEN_ADDR}:{ETCD_PEER_PORT} "
+        f"--initial-cluster default=http://{prefill_host_ip}:{ETCD_PEER_PORT} "
+        f"--initial-advertise-peer-urls http://{prefill_host_ip}:{ETCD_PEER_PORT}"
     )
 
     etcd_process = run_command(etcd_cmd, background=True)
@@ -398,6 +399,7 @@ def setup_prefill_worker(
     # Only setup infrastructure in traditional mode (not multiple frontends)
     if not multiple_frontends_enabled and worker_idx == 0 and local_rank == 0:
         setup_head_prefill_node(master_ip, run_in_ci)
+        print("Head prefill node setup complete")
     else:
         logging.info(f"Setting up prefill worker {worker_idx}, local rank {local_rank}")
         if not wait_for_etcd(f"http://{master_ip}:{ETCD_CLIENT_PORT}"):
@@ -507,6 +509,7 @@ def setup_env(master_ip: str):
 
     os.environ["NATS_SERVER"] = nats_server
     os.environ["ETCD_ENDPOINTS"] = etcd_endpoints
+    os.environ["ETCD_DATA_DIR"] = "/tmp/default.etcd"
 
     logging.info(f"set NATS_SERVER: {nats_server}")
     logging.info(f"set ETCD_ENDPOINTS: {etcd_endpoints}")
