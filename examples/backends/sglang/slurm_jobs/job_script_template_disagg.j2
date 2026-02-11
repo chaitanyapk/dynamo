@@ -45,7 +45,7 @@ CACHE_ROOT="/lustre/${CURRENT_USER}/model_cache"
 # mkdir -p "$FLASHINFER_WORKSPACE_DIR"
 # mkdir -p "$TORCH_EXTENSIONS_DIR"
 # mkdir -p "$TRITON_CACHE_DIR"
-export CONTAINER_HOME=/lustre/${CURRENT_USER}
+export CONTAINER_HOME="/home/chaitanyapk_google_com/hmlustre"
 
 set +x
 
@@ -182,9 +182,10 @@ echo "Decode worker leaders: ${decode_leaders[@]}"
 ENROOT_ARGS="\
     --container-image=${CONTAINER_IMAGE} \
     --no-container-entrypoint \
+    --container-writable \
     --no-container-mount-home \
     --export=HOME='/lustre_mount',XDG_CACHE_HOME='/lustre_mount/.cache',FLASHINFER_WORKSPACE_DIR='/lustre_mount/flashinfer_workspace',TORCH_EXTENSIONS_DIR='/lustre_mount/torch_extensions' \
-    --container-mounts=${MODEL_DIR}:/model/,${CONFIG_DIR}:/configs/,${SCRIPT_DIR}:/scripts/,${OUTPUT_DIR}:/outputs/,${LOG_DIR}:/logs/,${CONTAINER_HOME}:/lustre_mount,/dev/shm:/dev/shm \
+    --container-mounts=${CONFIG_DIR}:/configs/,${SCRIPT_DIR}:/scripts/,${OUTPUT_DIR}:/outputs/,${LOG_DIR}:/logs/,${CONTAINER_HOME}:/lustre_mount,/dev/shm:/dev/shm,/home/chaitanyapk_google_com/artefacts/nginx:/nginx,/var/lib:/var/lib \
 "
 
 # Build common worker arguments
@@ -217,6 +218,11 @@ WORKER_ARGS="$WORKER_ARGS --run-in-ci"
 {% if enable_multiple_frontends %}
 {% raw %}
 #contents of the model path directory
+# Launch nginx on node 0
+echo "Launching nginx on ${NGINX_NODE}"
+cmd="srun --overlap $ENROOT_ARGS --nodes=1 --ntasks=1 --nodelist=$NGINX_NODE --output=${LOG_DIR}/${NGINX_NODE}_nginx.out --error=${LOG_DIR}/${NGINX_NODE}_nginx.err python /scripts/worker_setup.py --worker_type nginx --nginx_config /logs/nginx.conf ${WORKER_ARGS}"
+echo "$cmd"
+$cmd &
 
 # Launch frontend on master node (node 1) - this will also start NATS/ETCD
 echo "Launching frontend + NATS/ETCD on master node ${MASTER_NODE}"

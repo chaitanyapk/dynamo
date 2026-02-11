@@ -2,7 +2,20 @@
 # NGINX will cycle through these servers in a round-robin fashion by default.
 worker_processes auto;
 
+pid /logs/nginx.pid;
+error_log /logs/nginx_error.log;
+
 http {
+
+    # Add these inside the http { ... } block
+    client_body_temp_path /logs/nginx_client_body;
+    proxy_temp_path       /logs/nginx_proxy_temp;
+    fastcgi_temp_path     /logs/nginx_fastcgi_temp;
+    uwsgi_temp_path       /logs/nginx_uwsgi_temp;
+    scgi_temp_path        /logs/nginx_scgi_temp;
+    
+    access_log            /logs/nginx_access.log;
+
     access_log off;
     upstream backend_servers {
         {% for frontend_host in frontend_hosts %}
